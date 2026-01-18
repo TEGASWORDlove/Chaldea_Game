@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chaldea Terminal V20.0</title>
+    <style>
+        :root { --fgo-blue: #1c2541; --fgo-gold: #d4af37; --fgo-red: #d90429; --fgo-bg: #f4f5f7; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: -apple-system, sans-serif; }
+        
+        /* iPhone 11 尺寸适配 */
+        #iphone { width: 375px; height: 812px; background: #222; border-radius: 50px; padding: 12px; position: relative; border: 4px solid #444; overflow: hidden; box-shadow: 0 0 50px rgba(0,0,0,0.8); }
+        #screen { width: 100%; height: 100%; background: var(--fgo-bg); border-radius: 40px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        
+        /* 全局组件 */
+        .page { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding: 20px; padding-top: 100px; padding-bottom: 100px; }
+        .page.active { display: flex; }
+        .status-bar { position: absolute; top: 0; width: 100%; background: var(--fgo-blue); color: white; padding: 45px 15px 10px; display: flex; justify-content: space-between; font-size: 11px; z-index: 100; border-bottom: 2px solid var(--fgo-gold); }
+        .btn { background: white; border: 2px solid var(--fgo-blue); color: var(--fgo-blue); padding: 14px; border-radius: 12px; margin: 8px 0; font-weight: bold; cursor: pointer; text-align: center; transition: 0.2s; }
+        .btn-main { background: var(--fgo-blue); color: var(--fgo-gold); border: 1px solid var(--fgo-gold); }
+        .btn:active { opacity: 0.7; transform: scale(0.98); }
+        input, select { width: 100%; padding: 15px; margin: 8px 0; border-radius: 12px; border: 1px solid #ddd; font-size: 14px; }
+
+        /* 文本展示 */
+        .narrative { background: #0d1117; color: #e6edf3; padding: 18px; border-radius: 15px; font-size: 13px; line-height: 1.8; white-space: pre-wrap; margin: 10px 0; border-left: 5px solid var(--fgo-gold); }
+        .res-list { background: rgba(212, 175, 55, 0.1); border: 1px dashed var(--fgo-gold); padding: 10px; border-radius: 10px; margin-bottom: 10px; color: #111; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; font-size: 9px; margin: 10px 0; background: #fff; }
+        th, td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+
+        /* 导航 */
+        .nav-bar { position: absolute; bottom: 0; width: 100%; height: 90px; background: var(--fgo-blue); display: none; justify-content: space-around; align-items: center; padding-bottom: 25px; border-top: 1px solid var(--fgo-gold); z-index: 100; }
+        .nav-item { color: #8a9bb8; font-size: 10px; text-align: center; cursor: pointer; flex: 1; }
+        .nav-item.active { color: white; font-weight: bold; }
+
+        /* 强制弹窗 */
+        #mask { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 2000; color: white; text-align: center; padding: 40px 20px; justify-content: center; align-items: center; flex-direction: column; }
+        #loading { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3000; color: gold; font-weight: bold; text-shadow: 0 0 10px black; }
+    </style>
+</head>
+<body>
+
+<div id="iphone">
+    <div id="screen">
+        <div id="loading">灵子转移中...</div>
+        <div id="mask">
+            <h2 id="mask-title" style="color:var(--fgo-red)">连接中断</h2>
+            <p id="mask-msg" style="font-size:14px; line-height:1.6;"></p>
+            <button class="btn btn-main" style="width:100%" onclick="location.reload()">重新初始化</button>
+        </div>
+
+        <div class="status-bar" id="top-bar" style="display:none;">
+            <span>💎 <span id="val-sq">30</span></span>
+            <span>⚡ AP: <span id="val-ap">3</span></span>
+            <span>📅 Day <span id="val-day">1</span></span>
+        </div>
+
+        <div id="page-api" class="page active" style="padding-top:40px;">
+            <h2 style="text-align:center; color: var(--fgo-blue);">迦勒底 AI 核心协议</h2>
+            <div style="background:white; padding:20px; border-radius:25px; box-shadow:0 10px 20px rgba(0,0,0,0.1);">
+                <label>API 端点:</label>
+                <input type="text" id="api-url" value="https://api.deepseek.com">
+                <label>API 密钥:</label>
+                <input type="password" id="api-key" placeholder="在此输入 DeepSeek 密钥">
+                <label>自定义模型:</label>
+                <input type="text" id="api-model" value="deepseek-chat">
+                <button class="btn btn-main" style="width:100%; margin-top:10px;" onclick="game.initSystem()">[ 激活系统 ]</button>
+            </div>
+        </div>
+
+        <div id="page-home" class="page">
+            <div id="report-table"></div>
+            <button class="btn btn-main" onclick="game.nextDay()">🌙 推进日期 (获取圣晶石)</button>
+        </div>
+
+        <div id="page-summon" class="page">
+            <div style="background:#000; color:gold; padding:20px; border-radius:15px; text-align:center; border:2px solid gold; margin-bottom:10px;">
+                <span style="font-size:12px; opacity:0.8;">当前 PICK UP</span><br>
+                <b style="font-size:20px;">阿喀琉斯 ★5 (SSR)</b>
+            </div>
+            <button class="btn" onclick="game.doSummon(1)">单次召唤 (3 石)</button>
+            <button class="btn btn-main" onclick="game.doSummon(11)">十一连召唤 (30 石) [保底]</button>
+            <div id="summon-display" style="display:none; margin-top:15px;">
+                <div class="res-list" id="summon-items"></div>
+                <div class="narrative" id="summon-ai"></div>
+            </div>
+        </div>
+
+        <div id="page-mana" class="page">
+            <h3>🔮 灵基补能 (魔力供给)</h3>
+            <label>御主性别确认：</label>
+            <select id="master-sex"><option value="男">藤丸立香 (男)</option><option value="女">藤丸立香 (女)</option></select>
+            <div id="target-list"></div>
+            <div id="mana-box" class="narrative" style="display:none;"></div>
+        </div>
+
+        <div id="page-battle" class="page">
+            <h3>⚔️ 特异点修复</h3>
+            <button class="btn" onclick="game.goBattle('邪龙百年战争', 1)">第一特异点：奥尔良 (1 AP)</button>
+            <button class="btn" onclick="game.goBattle('种火采集', 1)">周常任务：极级种火 (1 AP)</button>
+            <div id="battle-box" class="narrative" style="display:none;"></div>
+        </div>
+
+        <div id="page-roster" class="page"><h3>📜 灵基档案</h3><div id="ros-list"></div></div>
+        <div id="page-shop" class="page"><h3>🛒 达芬奇工房</h3><div id="shop-list"></div></div>
+
+        <div class="nav-bar" id="nav-bar">
+            <div class="nav-item" onclick="ui.nav('page-home', this)">🏠<br>首页</div>
+            <div class="nav-item" onclick="ui.nav('page-summon', this)">💎<br>召唤</div>
+            <div class="nav-item" onclick="ui.nav('page-battle', this)">⚔️<br>战斗</div>
+            <div class="nav-item" onclick="ui.nav('page-mana', this)">🔮<br>补能</div>
+            <div class="nav-item" onclick="ui.nav('page-shop', this)">🛒<br>商店</div>
+            <div class="nav-item" onclick="ui.nav('page-roster', this)">📜<br>灵基</div>
+        </div>
+    </div>
+</div>
+
+<script>
+const game = {
+    state: {
+        sq: 30, ap: 3, day: 1, 
+        srvs: [{ name: "玛修·基列莱特", class: "Shielder", lv: 1, star: "★3", fav: 100, sub: 100, loyal: 100, mana: 0, bond: 1, np: 1, status: "就绪" }],
+        api: { url: "", key: "", model: "" }
+    },
+
+    async callAI(prompt, sysPrompt = "你现在是FGO达芬奇，性格优雅毒舌且母性。") {
+        document.getElementById('loading').style.display = 'block';
+        try {
+            const resp = await fetch(`${this.state.api.url}/chat/completions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.state.api.key}` },
+                body: JSON.stringify({
+                    model: this.state.api.model,
+                    messages: [{role:"system", content:sysPrompt}, {role:"user", content:prompt}]
+                })
+            });
+            if(!resp.ok) throw new Error(`HTTP Error ${resp.status}`);
+            const data = await resp.json();
+            document.getElementById('loading').style.display = 'none';
+            return data.choices[0].message.content;
+        } catch (e) {
+            document.getElementById('loading').style.display = 'none';
+            ui.showMask("API 连接失败", `无法访问 AI 端点。\n原因：${e.message}\n请检查 Edge 跨域插件是否开启。`);
+            return null;
+        }
+    },
+
+    async initSystem() {
+        this.state.api.url = document.getElementById('api-url').value;
+        this.state.api.key = document.getElementById('api-key').value;
+        this.state.api.model = document.getElementById('api-model').value;
+        
+        if(!this.state.api.key) return alert("密钥不能为空！");
+        
+        const test = await this.callAI("系统测试，请回复：Link Start.");
+        if(test) {
+            document.getElementById('page-api').style.display = 'none';
+            document.getElementById('nav-bar').style.display = 'flex';
+            document.getElementById('top-bar').style.display = 'flex';
+            ui.nav('page-home', document.querySelector('.nav-item'));
+        }
+    },
+
+    render() {
+        document.getElementById('val-sq').innerText = this.state.sq;
+        document.getElementById('val-ap').innerText = this.state.ap;
+        document.getElementById('val-day').innerText = this.state.day;
+
+        // 晨间汇报 [全量对账]
+        let h = `<h3>☕ 晨间汇报 (Day ${this.state.day})</h3><p style="font-size:10px">灵基总数: [${this.state.srvs.length}]位</p><table><tr><th>从者(职阶)</th><th>等级/稀有度</th><th>好感/服从/忠诚</th><th>补魔/羁绊</th><th>宝具</th><th>状态</th></tr>`;
+        this.state.srvs.forEach(s => {
+            h += `<tr><td>${s.name}</td><td>Lv.${s.lv}/${s.star}</td><td>${s.fav}%/${s.sub}%/${s.loyal}%</td><td>${s.mana}/Lv.${s.bond}</td><td>Lv.${s.np}</td><td>${s.status}</td></tr>`;
+        });
+        h += `</table>`;
+        document.getElementById('report-table').innerHTML = h;
+
+        // 灵基档案与补能列表
+        let r = ""; let m = "";
+        this.state.srvs.forEach(s => {
+            r += `<div class='narrative' style='background:#fff; color:#333;'><b>${s.name}</b> [${s.star}]<br>宝具: Lv.${s.np} | 补魔: ${s.mana}次</div>`;
+            if(!s.name.includes("玛修")) m += `<button class="btn" onclick="game.doMana('${s.name}')">与 ${s.name} 补能</button>`;
+        });
+        document.getElementById('ros-list').innerHTML = r;
+        document.getElementById('target-list').innerHTML = m || "<p style='text-align:center;color:gray'>暂无其他从者</p>";
+        
+        // 商店
+        document.getElementById('shop-list').innerHTML = `<table><tr><th>商品</th><th>消耗(绿方块)</th></tr><tr><td>呼符</td><td>20</td></tr><tr><td>羁绊礼装</td><td>1000</td></tr></table>`;
+    },
+
+    async doSummon(count) {
+        const cost = (count===11)?30:3;
+        if(this.state.sq < cost) return alert("圣晶石不足！");
+        this.state.sq -= cost;
+
+        let pool = [{n:"阿喀琉斯", r:5}, {n:"兰斯洛特", r:4}, {n:"库·丘林", r:3}, {n:"黑键", r:3}, {n:"钢之抱负", r:4}];
+        let results = []; let hasSrv = false; let has4 = false;
+
+        for(let i=0; i<count; i++) {
+            let res = pool[Math.floor(Math.random()*pool.length)];
+            // 保底判定
+            if(count===11 && i===10) {
+                if(!hasSrv) res = {n:"库·丘林", r:3};
+                if(!has4) res = {n:"虚数魔术", r:4};
+            }
+            results.push(res);
+            if(res.r >= 3 && res.n!=="黑键" && res.n!=="钢之抱负") { hasSrv=true; this.addSrv(res); }
+            if(res.r >= 4) has4=true;
+        }
+
+        // 核心修正：显示出货内容
+        const display = document.getElementById('summon-display');
+        const items = document.getElementById('summon-items');
+        display.style.display = 'block';
+        items.innerHTML = `✨ 召唤结果：<br>${results.map(r => `<span style="color:${r.r===5?'#e67e22':'#2980b9'}">${r.n}(★${r.r})</span>`).join(' 、 ')}`;
+
+        const aiText = await this.callAI(`御主进行了${count}次召唤，结果是：${results.map(r=>r.n).join(',')}。请用达芬奇的口吻进行毒舌或赞美评价。`);
+        document.getElementById('summon-ai').innerText = aiText || "系统繁忙，无法生成评价。";
+        this.render();
+    },
+
+    addSrv(res) {
+        let e = this.state.srvs.find(x => x.name === res.n);
+        if(e) e.np = Math.min(5, e.np+1);
+        else this.state.srvs.push({ name: res.n, class: "Saber", lv: 1, star: "★"+res.r, fav: 50, sub: 40, loyal: 50, mana: 0, bond: 1, np: 1, status: "健康" });
+    },
+
+    async doMana(name) {
+        const sex = document.getElementById('master-sex').value;
+        const sys = "你现在负责灵基补能。达芬奇离开并关闭监控。请以第三人称详细描写御主与从者的身体接触、体液交换、魔力涌动。风格华丽迷幻，字数必须超过5000字，强调御主的绝对主导。";
+        const res = await this.callAI(`补能对象：${name}，御主：${sex}。请开始全量叙事。`, sys);
+        if(res) {
+            const box = document.getElementById('mana-box');
+            box.style.display = 'block';
+            box.innerHTML = res + `<br><br><b style="color:gold;">[结算] 补魔成功！💎+1，服从度确认提升。</b>`;
+            this.state.sq += 1;
+            this.state.srvs.find(s => s.name === name).mana++;
+            this.render();
+        }
+    },
+
+    async goBattle(name, ap) {
+        if(this.state.ap < ap) return alert("AP 不足");
+        this.state.ap -= ap;
+        const res = await this.callAI(`御主正在战斗：${name}。请以达芬奇在指挥室的口吻描写战斗。`);
+        const box = document.getElementById('battle-box');
+        box.style.display = 'block';
+        box.innerHTML = `【战斗记录：${name}】<br>${res}<br><br><span style="color:gold;">获得战利品：圣晶石 +1 💎</span>`;
+        this.state.sq += 1;
+        this.render();
+    },
+
+    nextDay() {
+        this.state.day++; this.state.ap = 3; this.state.sq += 2;
+        alert(`📅 Day ${this.state.day} 开始！登录奖励圣晶石+2 已送达。`);
+        this.render();
+    }
+};
+
+const ui = {
+    nav(id, el) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        if(el) el.classList.add('active');
+        game.render();
+    },
+    showMask(title, msg) {
+        document.getElementById('mask-title').innerText = title;
+        document.getElementById('mask-msg').innerText = msg;
+        document.getElementById('mask').style.display = 'flex';
+    }
+};
+</script>
+</body>
+</html>
